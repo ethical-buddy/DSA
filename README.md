@@ -5,6 +5,7 @@
 [![HTML5](https://img.shields.io/badge/HTML5-E34F26.svg)](https://developer.mozilla.org/en-US/docs/Web/HTML)
 [![CSS3](https://img.shields.io/badge/CSS3-1572B6.svg)](https://developer.mozilla.org/en-US/docs/Web/CSS)
 
+![Demo](./DSA.png)
 ##  Overview
 
 **Watch 4 classic pathfinding algorithms battle in real-time to conquer territory!**
