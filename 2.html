@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PATH FINDER DUEL | A* vs BFS vs DFS vs Dijkstra | Territory Conquest</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a1a 0%, #0f0f2a 100%);
+            font-family: 'Segoe UI', 'Fira Code', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .duel-container {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(3px);
+            border-radius: 2rem;
+            padding: 1.5rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        .arena {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .algo-card {
+            background: linear-gradient(145deg, #151e2c, #0f1622);
+            border-radius: 1.5rem;
+            padding: 1rem;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .algo-card:hover {
+            transform: translateY(-5px);
+        }
+
+        canvas {
+            display: block;
+            width: 280px;
+            height: 280px;
+            border-radius: 1rem;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.1);
+            cursor: pointer;
+            background: #000;
+        }
+
+        .info {
+            margin-top: 12px;
+            text-align: center;
+        }
+
+        .algo-name {
+            font-size: 1.1rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #fff, #aaccff);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            font-family: monospace;
+            margin-top: 8px;
+            padding: 4px 8px;
+            background: #00000066;
+            border-radius: 20px;
+            color: #ccddee;
+        }
+
+        .area-value {
+            color: #ffd966;
+            font-weight: bold;
+        }
+
+        .time-value {
+            color: #66ffcc;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #2a2a3a;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.05s linear;
+            border-radius: 4px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #1e2f41;
+            border: none;
+            padding: 10px 24px;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 1rem;
+            border-radius: 40px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        button:hover {
+            background: #2e4a66;
+            transform: scale(0.96);
+        }
+
+        .reset-btn {
+            background: #5a2a4a;
+        }
+
+        .reset-btn:hover {
+            background: #7a3a64;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 18px;
+            padding: 8px 16px;
+            background: #00000088;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            backdrop-filter: blur(4px);
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 15px;
+            font-size: 0.7rem;
+            flex-wrap: wrap;
+        }
+
+        .legend span {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+
+        @media (max-width: 1200px) {
+            canvas { width: 220px; height: 220px; }
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div class="duel-container">
+        <div class="arena" id="arena"></div>
+        <div class="controls">
+            <button id="startBtn">🏁 START RACE (Conquer Territory)</button>
+            <button id="resetBtn" class="reset-btn">🔄 NEW MAP & RESET</button>
+        </div>
+        <div class="status" id="statusMsg">⚔️ 4 Pathfinding Algorithms race to conquer the most territory! Click START</div>
+        <div class="legend">
+            <div><span style="background: #ff4757;"></span> A* (Heuristic)</div>
+            <div><span style="background: #1e90ff;"></span> BFS (Breadth)</div>
+            <div><span style="background: #2ed573;"></span> DFS (Depth)</div>
+            <div><span style="background: #ffa502;"></span> Dijkstra (Weighted)</div>
+            <div>⬛ Black = Unexplored | 🟩 Colored = Conquered Territory</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // GRID SIZE: 150x150 = 22,500 cells (smooth performance, visible conquest)
+        const SIZE = 150;
+        const TOTAL_CELLS = SIZE * SIZE;
+        
+        // Obstacle density (walls make pathfinding interesting)
+        const OBSTACLE_DENSITY = 0.18;
+        
+        // Algorithms configuration
+        const algorithms = [
+            { name: "A* (A-Star)", key: "astar", color: "#ff4757", fillColor: "#ff6b81", gradient: "#c0392b" },
+            { name: "BFS", key: "bfs", color: "#1e90ff", fillColor: "#4aa8ff", gradient: "#0f52ba" },
+            { name: "DFS", key: "dfs", color: "#2ed573", fillColor: "#5fdc8a", gradient: "#1e8e3e" },
+            { name: "Dijkstra", key: "dijkstra", color: "#ffa502", fillColor: "#ffb142", gradient: "#e67e22" }
+        ];
+        
+        let grid = [];           // 2D grid: 0=empty, 1=wall
+        let startPos = { x: 2, y: 2 };
+        let targetPos = { x: SIZE-3, y: SIZE-3 };
+        
+        // Store runners
+        let runners = [];
+        let raceActive = false;
+        let resetRequested = false;
+        
+        // DOM elements
+        const arena = document.getElementById("arena");
+        let canvases = {};
+        let progressFills = {};
+        let areaSpans = {};
+        let timeSpans = {};
+        
+        // Generate random grid with obstacles (maze-like)
+        function generateGrid() {
+            const newGrid = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+            
+            // Add random obstacles (walls)
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE; j++) {
+                    // Keep start and target free
+                    if ((i === startPos.x && j === startPos.y) || (i === targetPos.x && j === targetPos.y)) {
+                        newGrid[i][j] = 0;
+                        continue;
+                    }
+                    // Random walls
+                    if (Math.random() < OBSTACLE_DENSITY) {
+                        newGrid[i][j] = 1; // wall
+                    } else {
+                        newGrid[i][j] = 0; // free
+                    }
+                }
+            }
+            
+            // Ensure there's a path (simple guarantee: clear a corridor)
+            for (let i = 0; i < SIZE; i++) {
+                newGrid[i][Math.floor(SIZE/2)] = 0;
+                newGrid[Math.floor(SIZE/2)][i] = 0;
+            }
+            newGrid[startPos.x][startPos.y] = 0;
+            newGrid[targetPos.x][targetPos.y] = 0;
+            
+            return newGrid;
+        }
+        
+        // Heuristic for A* (Manhattan distance)
+        function heuristic(x1, y1, x2, y2) {
+            return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+        }
+        
+        // ============ A* ALGORITHM (Generator) ============
+        function* astarGenerator(grid, start, target) {
+            const openSet = [{ ...start, g: 0, f: heuristic(start.x, start.y, target.x, target.y) }];
+            const cameFrom = new Map();
+            const gScore = new Map();
+            const visited = new Set();
+            const closedSet = new Set();
+            
+            gScore.set(`${start.x},${start.y}`, 0);
+            
+            while (openSet.length > 0) {
+                openSet.sort((a, b) => a.f - b.f);
+                const current = openSet.shift();
+                const currentKey = `${current.x},${current.y}`;
+                
+                if (closedSet.has(currentKey)) continue;
+                closedSet.add(currentKey);
+                visited.add(currentKey);
+                
+                // Yield after exploring each node
+                yield { type: "visit", pos: { x: current.x, y: current.y }, visited: Array.from(visited) };
+                
+                if (current.x === target.x && current.y === target.y) {
+                    // Reconstruct path for visualization
+                    let path = [];
+                    let curr = current;
+                    while (curr) {
+                        path.unshift({ x: curr.x, y: curr.y });
+                        const prev = cameFrom.get(`${curr.x},${curr.y}`);
+                        curr = prev;
+                    }
+                    yield { type: "done", visited: Array.from(visited), path };
+                    return;
+                }
+                
+                const neighbors = [
+                    { x: current.x+1, y: current.y }, { x: current.x-1, y: current.y },
+                    { x: current.x, y: current.y+1 }, { x: current.x, y: current.y-1 }
+                ];
+                
+                for (const neighbor of neighbors) {
+                    if (neighbor.x < 0 || neighbor.x >= SIZE || neighbor.y < 0 || neighbor.y >= SIZE) continue;
+                    if (grid[neighbor.x][neighbor.y] === 1) continue;
+                    
+                    const tentativeG = gScore.get(currentKey) + 1;
+                    const neighborKey = `${neighbor.x},${neighbor.y}`;
+                    
+                    if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
+                        cameFrom.set(neighborKey, { x: current.x, y: current.y });
+                        gScore.set(neighborKey, tentativeG);
+                        const f = tentativeG + heuristic(neighbor.x, neighbor.y, target.x, target.y);
+                        const existing = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
+                        if (existing) {
+                            existing.g = tentativeG;
+                            existing.f = f;
+                        } else {
+                            openSet.push({ ...neighbor, g: tentativeG, f });
+                        }
+                    }
+                }
+            }
+            yield { type: "done", visited: Array.from(visited), path: [] };
+        }
+        
+        // ============ BFS ALGORITHM ============
+        function* bfsGenerator(grid, start, target) {
+            const queue = [{ x: start.x, y: start.y, path: [{ x: start.x, y: start.y }] }];
+            const visited = new Set();
+            visited.add(`${start.x},${start.y}`);
+            
+            while (queue.length > 0) {
+                const current = queue.shift();
+                yield { type: "visit", pos: current, visited: Array.from(visited) };
+                
+                if (current.x === target.x && current.y === target.y) {
+                    yield { type: "done", visited: Array.from(visited), path: current.path };
+                    return;
+                }
+                
+                const neighbors = [
+                    { x: current.x+1, y: current.y }, { x: current.x-1, y: current.y },
+                    { x: current.x, y: current.y+1 }, { x: current.x, y: current.y-1 }
+                ];
+                
+                for (const neighbor of neighbors) {
+                    const key = `${neighbor.x},${neighbor.y}`;
+                    if (neighbor.x >= 0 && neighbor.x < SIZE && neighbor.y >= 0 && neighbor.y < SIZE &&
+                        grid[neighbor.x][neighbor.y] !== 1 && !visited.has(key)) {
+                        visited.add(key);
+                        queue.push({ ...neighbor, path: [...current.path, { x: neighbor.x, y: neighbor.y }] });
+                    }
+                }
+            }
+            yield { type: "done", visited: Array.from(visited), path: [] };
+        }
+        
+        // ============ DFS ALGORITHM ============
+        function* dfsGenerator(grid, start, target) {
+            const stack = [{ x: start.x, y: start.y, path: [{ x: start.x, y: start.y }] }];
+            const visited = new Set();
+            
+            while (stack.length > 0) {
+                const current = stack.pop();
+                const key = `${current.x},${current.y}`;
+                if (visited.has(key)) continue;
+                visited.add(key);
+                yield { type: "visit", pos: current, visited: Array.from(visited) };
+                
+                if (current.x === target.x && current.y === target.y) {
+                    yield { type: "done", visited: Array.from(visited), path: current.path };
+                    return;
+                }
+                
+                const neighbors = [
+                    { x: current.x+1, y: current.y }, { x: current.x-1, y: current.y },
+                    { x: current.x, y: current.y+1 }, { x: current.x, y: current.y-1 }
+                ];
+                
+                for (const neighbor of neighbors) {
+                    const nKey = `${neighbor.x},${neighbor.y}`;
+                    if (neighbor.x >= 0 && neighbor.x < SIZE && neighbor.y >= 0 && neighbor.y < SIZE &&
+                        grid[neighbor.x][neighbor.y] !== 1 && !visited.has(nKey)) {
+                        stack.push({ ...neighbor, path: [...current.path, { x: neighbor.x, y: neighbor.y }] });
+                    }
+                }
+            }
+            yield { type: "done", visited: Array.from(visited), path: [] };
+        }
+        
+        // ============ DIJKSTRA ALGORITHM ============
+        function* dijkstraGenerator(grid, start, target) {
+            const distances = new Map();
+            const pq = [{ x: start.x, y: start.y, dist: 0, path: [{ x: start.x, y: start.y }] }];
+            const visited = new Set();
+            distances.set(`${start.x},${start.y}`, 0);
+            
+            while (pq.length > 0) {
+                pq.sort((a,b) => a.dist - b.dist);
+                const current = pq.shift();
+                const key = `${current.x},${current.y}`;
+                
+                if (visited.has(key)) continue;
+                visited.add(key);
+                yield { type: "visit", pos: current, visited: Array.from(visited) };
+                
+                if (current.x === target.x && current.y === target.y) {
+                    yield { type: "done", visited: Array.from(visited), path: current.path };
+                    return;
+                }
+                
+                const neighbors = [
+                    { x: current.x+1, y: current.y }, { x: current.x-1, y: current.y },
+                    { x: current.x, y: current.y+1 }, { x: current.x, y: current.y-1 }
+                ];
+                
+                for (const neighbor of neighbors) {
+                    const nKey = `${neighbor.x},${neighbor.y}`;
+                    if (neighbor.x >= 0 && neighbor.x < SIZE && neighbor.y >= 0 && neighbor.y < SIZE &&
+                        grid[neighbor.x][neighbor.y] !== 1 && !visited.has(nKey)) {
+                        const newDist = current.dist + 1;
+                        if (!distances.has(nKey) || newDist < distances.get(nKey)) {
+                            distances.set(nKey, newDist);
+                            pq.push({ ...neighbor, dist: newDist, path: [...current.path, { x: neighbor.x, y: neighbor.y }] });
+                        }
+                    }
+                }
+            }
+            yield { type: "done", visited: Array.from(visited), path: [] };
+        }
+        
+        // Draw canvas based on visited cells
+        function drawExploration(canvas, visitedSet, pathArray, algoColor, walls, finalPath = null) {
+            const ctx = canvas.getContext('2d');
+            const cellW = canvas.width / SIZE;
+            const cellH = canvas.height / SIZE;
+            
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw walls
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE; j++) {
+                    if (walls[i][j] === 1) {
+                        ctx.fillStyle = "#2a2a2a";
+                        ctx.fillRect(j * cellW, i * cellH, cellW, cellH);
+                    }
+                }
+            }
+            
+            // Draw visited cells (conquered territory)
+            for (const cell of visitedSet) {
+                const [x, y] = cell.split(',').map(Number);
+                if (walls[x][y] !== 1) {
+                    ctx.fillStyle = algoColor + "80"; // semi-transparent
+                    ctx.fillRect(y * cellW, x * cellH, cellW, cellH);
+                }
+            }
+            
+            // Draw final path if exists
+            if (finalPath && finalPath.length > 0) {
+                for (const p of finalPath) {
+                    ctx.fillStyle = algoColor;
+                    ctx.fillRect(p.y * cellW, p.x * cellH, cellW, cellH);
+                }
+            }
+            
+            // Draw start (green) and target (red)
+            ctx.fillStyle = "#00ff88";
+            ctx.fillRect(startPos.y * cellW, startPos.x * cellH, cellW, cellH);
+            ctx.fillStyle = "#ff3366";
+            ctx.fillRect(targetPos.y * cellW, targetPos.x * cellH, cellW, cellH);
+        }
+        
+        // Run algorithm with visualization
+        async function runPathfinder(runner, gridData) {
+            const startTime = Date.now();
+            let generator;
+            switch(runner.key) {
+                case "astar": generator = astarGenerator(gridData, startPos, targetPos); break;
+                case "bfs": generator = bfsGenerator(gridData, startPos, targetPos); break;
+                case "dfs": generator = dfsGenerator(gridData, startPos, targetPos); break;
+                case "dijkstra": generator = dijkstraGenerator(gridData, startPos, targetPos); break;
+                default: return;
+            }
+            
+            let result;
+            let visitedCells = new Set();
+            let finalPath = [];
+            
+            while (!(result = generator.next()).done) {
+                if (resetRequested) return;
+                const data = result.value;
+                if (data.type === "visit") {
+                    visitedCells = new Set(data.visited);
+                    runner.area = visitedCells.size;
+                    updateRunnerUI(runner);
+                    drawExploration(runner.canvas, visitedCells, finalPath, runner.fillColor, grid, null);
+                    await new Promise(r => setTimeout(r, 2));
+                } else if (data.type === "done") {
+                    visitedCells = new Set(data.visited);
+                    finalPath = data.path || [];
+                    runner.area = visitedCells.size;
+                    runner.finished = true;
+                    runner.timeMs = Date.now() - startTime;
+                    updateRunnerUI(runner);
+                    drawExploration(runner.canvas, visitedCells, finalPath, runner.fillColor, grid, finalPath);
+                }
+            }
+        }
+        
+        function updateRunnerUI(runner) {
+            const percent = (runner.area / TOTAL_CELLS) * 100;
+            if (progressFills[runner.key]) {
+                progressFills[runner.key].style.width = `${percent}%`;
+            }
+            if (areaSpans[runner.key]) {
+                areaSpans[runner.key].innerText = `${runner.area.toLocaleString()} / ${TOTAL_CELLS}`;
+            }
+            if (runner.finished && timeSpans[runner.key]) {
+                timeSpans[runner.key].innerText = `✅ ${runner.timeMs}ms`;
+            } else if (!runner.finished && runner.startTime && timeSpans[runner.key]) {
+                const elapsed = Date.now() - runner.startTime;
+                timeSpans[runner.key].innerText = `${elapsed}ms`;
+            }
+        }
+        
+        function buildUI() {
+            arena.innerHTML = "";
+            for (let algo of algorithms) {
+                const card = document.createElement("div");
+                card.className = "algo-card";
+                const canvas = document.createElement("canvas");
+                canvas.width = SIZE;
+                canvas.height = SIZE;
+                canvas.style.width = "280px";
+                canvas.style.height = "280px";
+                canvas.style.imageRendering = "pixelated";
+                
+                const info = document.createElement("div");
+                info.className = "info";
+                info.innerHTML = `
+                    <div class="algo-name">${algo.name}</div>
+                    <div class="stats"><span>🗺️ Territory:</span> <span class="area-value" id="area-${algo.key}">0 / ${TOTAL_CELLS}</span></div>
+                    <div class="stats"><span>⏱️ Time:</span> <span class="time-value" id="time-${algo.key}">— ms</span></div>
+                    <div class="progress-bar"><div class="progress-fill" id="progress-${algo.key}" style="background: ${algo.color}"></div></div>
+                `;
+                card.appendChild(canvas);
+                card.appendChild(info);
+                arena.appendChild(card);
+                
+                canvases[algo.key] = canvas;
+                progressFills[algo.key] = document.getElementById(`progress-${algo.key}`);
+                areaSpans[algo.key] = document.getElementById(`area-${algo.key}`);
+                timeSpans[algo.key] = document.getElementById(`time-${algo.key}`);
+            }
+        }
+        
+        function resetRace() {
+            resetRequested = true;
+            raceActive = false;
+            
+            grid = generateGrid();
+            
+            runners = algorithms.map(algo => ({
+                key: algo.key,
+                name: algo.name,
+                fillColor: algo.color,
+                area: 0,
+                finished: false,
+                timeMs: null,
+                startTime: null,
+                canvas: canvases[algo.key]
+            }));
+            
+            // Draw initial state (no exploration)
+            for (let runner of runners) {
+                drawExploration(runner.canvas, new Set(), [], runner.fillColor, grid, null);
+                if (progressFills[runner.key]) progressFills[runner.key].style.width = "0%";
+                if (areaSpans[runner.key]) areaSpans[runner.key].innerText = `0 / ${TOTAL_CELLS}`;
+                if (timeSpans[runner.key]) timeSpans[runner.key].innerText = "— ms";
+            }
+            
+            resetRequested = false;
+            document.getElementById("statusMsg").innerHTML = "🔄 New map generated! Press START to watch algorithms conquer territory.";
+        }
+        
+        async function startRace() {
+            if (raceActive) {
+                document.getElementById("statusMsg").innerHTML = "⚠️ Race already running! Reset to start over.";
+                return;
+            }
+            resetRequested = false;
+            raceActive = true;
+            
+            // Reset fresh state
+            grid = generateGrid();
+            runners.forEach(runner => {
+                runner.area = 0;
+                runner.finished = false;
+                runner.timeMs = null;
+                drawExploration(runner.canvas, new Set(), [], runner.fillColor, grid, null);
+                updateRunnerUI(runner);
+            });
+            
+            document.getElementById("statusMsg").innerHTML = "🏁 RACE STARTED! Watch as algorithms explore and conquer territory...";
+            
+            const promises = runners.map(runner => runPathfinder(runner, grid));
+            await Promise.allSettled(promises);
+            
+            if (!resetRequested) {
+                raceActive = false;
+                const sorted = [...runners].filter(r => r.finished).sort((a,b) => b.area - a.area);
+                if (sorted.length > 0) {
+                    const winner = sorted[0];
+                    document.getElementById("statusMsg").innerHTML = `🏆 WINNER: ${winner.name} 🏆 | Conquered ${winner.area} cells in ${winner.timeMs}ms! 🎉`;
+                } else {
+                    document.getElementById("statusMsg").innerHTML = "Race finished! Check results above.";
+                }
+            }
+        }
+        
+        buildUI();
+        resetRace();
+        
+        document.getElementById("startBtn").addEventListener("click", startRace);
+        document.getElementById("resetBtn").addEventListener("click", () => resetRace());
+    })();
+</script>
+</body>
+</html>
